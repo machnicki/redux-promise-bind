@@ -1,0 +1,25 @@
+{
+  "name": "redux-promise-bind",
+  "version": "1.0.0",
+  "description": "Redux promise middleware",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://machnicki@github.com/machnicki/redux-promise-bind.git"
+  },
+  "keywords": [
+    "redux",
+    "middleware",
+    "redux-middleware",
+    "redux-promise"
+  ],
+  "author": "Miron Machnicki <miron@machnicki.com.pl>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/machnicki/redux-promise-bind/issues"
+  },
+  "homepage": "https://github.com/machnicki/redux-promise-bind#readme"
+}
