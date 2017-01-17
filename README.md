@@ -5,3 +5,11 @@ Promise Bind [middleware](http://redux.js.org/docs/advanced/Middleware.html) for
 ```js
 npm install --save redux-promise-bind
 ```
+
+## Motivation
+
+More control over promises
+
+## License
+
+MIT
