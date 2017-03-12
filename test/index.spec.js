@@ -17,8 +17,17 @@ describe('#Redux Promise Bind Middleware', () => {
   mocks.doDispatch = () => mocks.doNext
   mocks.promise = () => ({
     then: (success, error) => {
-      promiseMockSuccess = success
-      promiseMockError = error
+      let successCallback = () => null
+      let errorCallback = () => null
+
+      promiseMockSuccess = (...attr) => {
+        successCallback(success(...attr))
+      }
+      promiseMockError = (...attr) => {
+        errorCallback(error(...attr))
+      }
+
+      return { then: (cb, ex) => { successCallback = cb, errorCallback = ex } }
     },
   })
 
@@ -112,8 +121,32 @@ describe('#Redux Promise Bind Middleware', () => {
     })
   })
 
-  xit('should chain promises', () => {
-    // .then() after dispatch
+  it('should chain promises after success', () => {
+    const thenSpy = sinon.spy()
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+    }).then(thenSpy)
+
+    promiseMockSuccess({ data: 'test' })
+
+    expect(thenSpy).to.have.been.calledOnce
+    expect(thenSpy).to.have.been.calledWith({ data: 'test' })
+  })
+
+  it('should chain promises after failure', () => {
+    const thenSpy = sinon.spy()
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+    }).then(null, thenSpy)
+
+    promiseMockError('error!')
+
+    expect(thenSpy).to.have.been.calledOnce
+    expect(thenSpy).to.have.been.calledWith('error!')
   })
 
   xit('should trigger promises in predefined queue', () => {
