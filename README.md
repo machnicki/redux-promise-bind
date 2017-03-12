@@ -57,6 +57,91 @@ const store = createStore(
 )
 ```
 
-## License
+## Usage
+To handle action by Redux Promise Bind you need to dispatch action with `promise`
+attribute in body. It could for example ajax client.
 
+### Passing attributes to promise
+You can bind attributes directly to your function
+```js
+function actionCreator() {
+  return {
+    type: 'ACTION_TYPE',
+    promise: yourFunction.bind(null, 'arg1', 'arg2')
+  }
+}
+```
+or you can pass them in promiseArg attribute
+```js
+function actionCreator() {
+  return {
+    type: 'ACTION_TYPE',
+    promise: yourFunction,
+    promiseArg: ['arg1', 'arg2'],
+  }
+}
+```
+
+### Access to response data in container
+Because Redux Promise Bind Middleware returns promises and responses, you could have access
+to them in your container or in another middleware.
+
+```js
+this.props.dispatch(
+  myActionCreator(arg1)
+).then((promiseResponse) => console.log(`data from promise ${promiseResponse}`))
+```
+
+### Metadata and responses
+Redux Promise Bind Middleware will dispatch actions with `_START`, `_SUCCESS` or `_ERROR` action types for
+you. Success promises response or error response will be kept in `payload` action parameter.
+
+You can pass some metadata in `metadata` action parameter if you want to keep it in each generic action.
+
+For example, you can dispatch action
+```js
+{
+  type: 'SAVE',
+  promise: model.save,
+  promiseArg: '123',
+  metadata: { id: '123' },
+}
+```
+`model.save` is function, which create HTTP request to save our data.
+
+Redux Promise Bind Middleware immediately will dispatch action
+```js
+{
+  type: 'SAVE_START',
+  metadata: { id: '123' },
+}
+```
+so you can show spinner or show appropriate message. Metadata in this case could be helpful
+if you would like to have Redux store with states (`isLoading`, `hasError`) associated to ID.
+
+After successful promise resolving (let's assume that `model.save` has returned `success` string)
+Redux Promise Bind Middleware immediately will dispatch action
+```js
+{
+  type: 'SAVE_SUCCESS',
+  payload: 'success',
+  metadata: { id: '123' },
+}
+```
+
+If promise will throw an error (let's assume that `model.save` has returned `error` string)
+Redux Promise Bind Middleware immediately will dispatch action
+```js
+{
+  type: 'SAVE_ERROR',
+  payload: 'error',
+  metadata: { id: '123' },
+}
+```
+
+For both responses you could for example change your Redux state and hide spinner for specific ID.
+
+## Group promises (TODO promise queue, takeLast, takeFirst)
+
+## License
 MIT
