@@ -9,19 +9,29 @@ import promiseBindMiddleware from '../src/index'
 chai.use(sinonChai)
 
 describe('#Redux Promise Bind Middleware', () => {
+  let promiseMockSuccess
+  let promiseMockError
+
   const mocks = {}
   mocks.doNext = () => null
   mocks.doDispatch = () => mocks.doNext
+  mocks.promise = () => ({
+    then: (success, error) => {
+      promiseMockSuccess = success
+      promiseMockError = error
+    },
+  })
+
   const nextSpy = sinon.spy(mocks, 'doNext')
   const dispatchSpy = sinon.spy(mocks, 'doDispatch')
+  const promiseSpy = sinon.spy(mocks, 'promise')
 
   const dispatchAction = promiseBindMiddleware({ dispatch: mocks.doDispatch })(mocks.doNext)
-
-  const samplePromise = () => null
 
   beforeEach(() => {
     nextSpy.reset()
     dispatchSpy.reset()
+    promiseSpy.reset()
   })
 
   it('should trigger next middleware if promise doesn\'t exist', () => {
@@ -35,21 +45,71 @@ describe('#Redux Promise Bind Middleware', () => {
     })
   })
 
-  xit('should trigger promise function', () => {
-    promiseBindMiddleware({
+  it('should trigger promise function', () => {
+    dispatchAction({
       type: 'MY_ACTION',
-      promise: samplePromise.bind(null, 'myParam'),
+      promise: mocks.promise,
+      promiseArg: ['test1', 'test2'],
+    })
+
+    expect(promiseSpy).to.have.been.calledOnce
+    expect(promiseSpy).to.have.been.calledWith('test1', 'test2')
+  })
+
+  it('should trigger promise function with bind', () => {
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise.bind(null, 'test3', 'test4'),
+    })
+
+    expect(promiseSpy).to.have.been.calledOnce
+    expect(promiseSpy).to.have.been.calledWith('test3', 'test4')
+  })
+
+  it('should dispatch proper actions on success', () => {
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      metadata: { foo: 'bar' },
+    })
+
+    expect(dispatchSpy).to.have.been.calledOnce
+    expect(dispatchSpy).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: { foo: 'bar' },
+    })
+
+    promiseMockSuccess({ data: 'test' })
+
+    expect(dispatchSpy).to.have.been.calledTwice
+    expect(dispatchSpy.secondCall).to.have.been.calledWith({
+      type: 'MY_ACTION_SUCCESS',
+      metadata: { foo: 'bar' },
+      data: { data: 'test' },
     })
   })
 
-  xit('should dispatch proper actions on success', () => {
-    // expect MY_ACTION_START with metadata
-    // expect MY_ACTION_SUCCESS with metadata
-  })
+  it('should dispatch proper actions on error', () => {
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      metadata: { foo: 'bar' },
+    })
 
-  xit('should dispatch proper actions on error', () => {
-    // expect MY_ACTION_START with metadata
-    // expect MY_ACTION_ERROR with metadata
+    expect(dispatchSpy).to.have.been.calledOnce
+    expect(dispatchSpy).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: { foo: 'bar' },
+    })
+
+    promiseMockError({ data: 'test' })
+
+    expect(dispatchSpy).to.have.been.calledTwice
+    expect(dispatchSpy.secondCall).to.have.been.calledWith({
+      type: 'MY_ACTION_ERROR',
+      metadata: { foo: 'bar' },
+      data: { data: 'test' },
+    })
   })
 
   xit('should chain promises', () => {
@@ -59,14 +119,14 @@ describe('#Redux Promise Bind Middleware', () => {
   xit('should trigger promises in predefined queue', () => {
     promiseBindMiddleware({
       type: 'MY_ACTION1',
-      promise: samplePromise.bind(null, 'myParam1'),
+      promise: mocks.promise.bind(null, 'myParam1'),
       group: 'myGroup',
       logic: 'inQueue',
     })
 
     promiseBindMiddleware({
       type: 'MY_ACTION2',
-      promise: samplePromise.bind(null, 'myParam2'),
+      promise: mocks.promise.bind(null, 'myParam2'),
       group: 'myGroup',
       logic: 'inQueue',
     })
@@ -75,14 +135,14 @@ describe('#Redux Promise Bind Middleware', () => {
   xit('should abort previous promises', () => {
     promiseBindMiddleware({
       type: 'MY_ACTION1',
-      promise: samplePromise.bind(null, 'myParam1'),
+      promise: mocks.promise.bind(null, 'myParam1'),
       group: 'myGroup',
       logic: 'takeLast',
     })
 
     promiseBindMiddleware({
       type: 'MY_ACTION2',
-      promise: samplePromise.bind(null, 'myParam2'),
+      promise: mocks.promise.bind(null, 'myParam2'),
       group: 'myGroup',
       logic: 'takeLast',
     })
@@ -91,14 +151,14 @@ describe('#Redux Promise Bind Middleware', () => {
   xit('should abort next promises', () => {
     promiseBindMiddleware({
       type: 'MY_ACTION1',
-      promise: samplePromise.bind(null, 'myParam1'),
+      promise: mocks.promise.bind(null, 'myParam1'),
       group: 'myGroup',
       logic: 'takeFirst',
     })
 
     promiseBindMiddleware({
       type: 'MY_ACTION2',
-      promise: samplePromise.bind(null, 'myParam2'),
+      promise: mocks.promise.bind(null, 'myParam2'),
       group: 'myGroup',
       logic: 'takeFirst',
     })
@@ -107,7 +167,7 @@ describe('#Redux Promise Bind Middleware', () => {
   xit('should add mapping', () => {
     promiseBindMiddleware({
       type: 'MY_ACTION',
-      promise: compose(map(data => data.results), samplePromise.bind(null, 'myParam')),
+      promise: compose(map(data => data.results), mocks.promise.bind(null, 'myParam')),
     })
   })
 })
