@@ -94,7 +94,7 @@ describe('#Redux Promise Bind Middleware', () => {
     expect(dispatchSpy.secondCall).to.have.been.calledWith({
       type: 'MY_ACTION_SUCCESS',
       metadata: { foo: 'bar' },
-      data: { data: 'test' },
+      payload: { data: 'test' },
     })
   })
 
@@ -117,7 +117,7 @@ describe('#Redux Promise Bind Middleware', () => {
     expect(dispatchSpy.secondCall).to.have.been.calledWith({
       type: 'MY_ACTION_ERROR',
       metadata: { foo: 'bar' },
-      data: { data: 'test' },
+      payload: { data: 'test' },
     })
   })
 

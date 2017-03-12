@@ -14,19 +14,19 @@ const promiseBindMiddleware = (
       .then((data) => {
         dispatch({
           type: `${type}_SUCCESS`,
-          data,
+          payload: data,
           metadata,
         })
 
         return data
-      }, (data) => {
+      }, (ex) => {
         dispatch({
           type: `${type}_ERROR`,
-          data,
+          payload: ex,
           metadata,
         })
 
-        return data
+        return ex
       })
   }
   return next(action)
