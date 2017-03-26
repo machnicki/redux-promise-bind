@@ -27,7 +27,7 @@ describe('#Redux Promise Bind Middleware', () => {
         errorCallback(error(...attr))
       }
 
-      return { then: (cb, ex) => { successCallback = cb, errorCallback = ex } }
+      return { then: (cb, ex) => { successCallback = cb; errorCallback = ex } }
     },
   })
 
