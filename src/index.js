@@ -1,31 +1,35 @@
 // @flow
+
+const extendBy = (object: Object, { metadata } : { metadata : any }) => {
+  if (metadata) return { ...object, metadata }
+  return object
+}
+
 const promiseBindMiddleware = (
   { dispatch } : { dispatch : Function },
 ) => (next: Function) => (action: Object) => {
   if (action && action.promise && typeof action.promise === 'function') {
     const { type, metadata, promise, promiseArg } = action
 
-    dispatch({
+    dispatch(extendBy({
       type: `${type}_START`,
-      metadata,
-    })
+    }, { metadata }))
 
     return promise(...(Array.isArray(promiseArg) ? promiseArg : [promiseArg]))
       .then((data) => {
-        dispatch({
+        dispatch(extendBy({
           type: `${type}_SUCCESS`,
           payload: data,
-          metadata,
-        })
+        }, { metadata }))
 
         return data
       }, (ex) => {
-        dispatch({
+        dispatch(extendBy({
           type: `${type}_ERROR`,
           payload: ex,
-          metadata,
-        })
+        }, { metadata }))
 
+        // TODO change to throw an error
         return ex
       })
   }
