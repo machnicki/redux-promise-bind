@@ -1,16 +1,13 @@
 import chai, { expect } from 'chai'
 import sinon from 'sinon'
 import sinonChai from 'sinon-chai'
-import compose from 'lodash/fp/compose'
-import map from 'lodash/fp/map'
 
 import promiseBindMiddleware from '../src/index'
 
 chai.use(sinonChai)
 
 describe('#Redux Promise Bind Middleware', () => {
-  let promiseMockSuccess
-  let promiseMockError
+  let promisesMocksQueue = []
 
   const mocks = {}
   mocks.doNext = () => null
@@ -20,12 +17,14 @@ describe('#Redux Promise Bind Middleware', () => {
       let successCallback = () => null
       let errorCallback = () => null
 
-      promiseMockSuccess = (...attr) => {
-        successCallback(success(...attr))
-      }
-      promiseMockError = (...attr) => {
-        errorCallback(error(...attr))
-      }
+      promisesMocksQueue.push({
+        success: (...attr) => {
+          successCallback(success(...attr))
+        },
+        error: (...attr) => {
+          errorCallback(error(...attr))
+        },
+      })
 
       return { then: (cb, ex) => { successCallback = cb; errorCallback = ex } }
     },
@@ -41,6 +40,7 @@ describe('#Redux Promise Bind Middleware', () => {
     nextSpy.reset()
     dispatchSpy.reset()
     promiseSpy.reset()
+    promisesMocksQueue = []
   })
 
   it('should trigger next middleware if promise doesn\'t exist', () => {
@@ -88,7 +88,7 @@ describe('#Redux Promise Bind Middleware', () => {
       metadata: { foo: 'bar' },
     })
 
-    promiseMockSuccess({ data: 'test' })
+    promisesMocksQueue[0].success({ data: 'test' })
 
     expect(dispatchSpy).to.have.been.calledTwice
     expect(dispatchSpy.secondCall).to.have.been.calledWith({
@@ -111,7 +111,7 @@ describe('#Redux Promise Bind Middleware', () => {
       metadata: { foo: 'bar' },
     })
 
-    promiseMockError({ data: 'test' })
+    promisesMocksQueue[0].error({ data: 'test' })
 
     expect(dispatchSpy).to.have.been.calledTwice
     expect(dispatchSpy.secondCall).to.have.been.calledWith({
@@ -129,7 +129,7 @@ describe('#Redux Promise Bind Middleware', () => {
       promise: mocks.promise,
     }).then(thenSpy)
 
-    promiseMockSuccess({ data: 'test' })
+    promisesMocksQueue[0].success({ data: 'test' })
 
     expect(thenSpy).to.have.been.calledOnce
     expect(thenSpy).to.have.been.calledWith({ data: 'test' })
@@ -143,25 +143,62 @@ describe('#Redux Promise Bind Middleware', () => {
       promise: mocks.promise,
     }).then(null, thenSpy)
 
-    promiseMockError('error!')
+    promisesMocksQueue[0].error('error!')
 
     expect(thenSpy).to.have.been.calledOnce
     expect(thenSpy).to.have.been.calledWith('error!')
   })
 
-  xit('should trigger promises in predefined queue', () => {
-    promiseBindMiddleware({
+  it('should trigger promises in predefined queue', (done) => {
+    const thenSpy = sinon.spy()
+
+    dispatchAction({
       type: 'MY_ACTION1',
       promise: mocks.promise.bind(null, 'myParam1'),
       group: 'myGroup',
       logic: 'inQueue',
-    })
+    }).then(thenSpy)
 
-    promiseBindMiddleware({
+    dispatchAction({
       type: 'MY_ACTION2',
       promise: mocks.promise.bind(null, 'myParam2'),
       group: 'myGroup',
       logic: 'inQueue',
+    }).then(thenSpy)
+
+    dispatchAction({
+      type: 'MY_ACTION3',
+      promise: mocks.promise.bind(null, 'myParam3'),
+      group: 'myAnotherGroup',
+      logic: 'inQueue',
+    }).then((...data) => {
+      thenSpy(...data)
+      expect(thenSpy).to.have.been.calledTwice
+      expect(thenSpy.getCall(0)).to.have.been.calledWith('my-first-response')
+      expect(thenSpy.getCall(1)).to.have.been.calledWith('my-second-response')
+      done()
+    })
+
+    expect(dispatchSpy.callCount).to.equal(2)
+    expect(dispatchSpy.getCall(0)).to.have.been.calledWith({
+      type: 'MY_ACTION1_START',
+    })
+    expect(dispatchSpy.getCall(1)).to.have.been.calledWith({
+      type: 'MY_ACTION3_START',
+    })
+    promisesMocksQueue[0].success('my-first-response')
+    promisesMocksQueue[1].success('my-second-response')
+    expect(dispatchSpy.callCount).to.equal(5)
+    expect(dispatchSpy.getCall(2)).to.have.been.calledWith({
+      type: 'MY_ACTION1_SUCCESS',
+      payload: 'my-first-response',
+    })
+    expect(dispatchSpy.getCall(3)).to.have.been.calledWith({
+      type: 'MY_ACTION2_START',
+    })
+    expect(dispatchSpy.getCall(4)).to.have.been.calledWith({
+      type: 'MY_ACTION3_SUCCESS',
+      payload: 'my-second-response',
     })
   })
 
@@ -194,13 +231,6 @@ describe('#Redux Promise Bind Middleware', () => {
       promise: mocks.promise.bind(null, 'myParam2'),
       group: 'myGroup',
       logic: 'takeFirst',
-    })
-  })
-
-  xit('should add mapping', () => {
-    promiseBindMiddleware({
-      type: 'MY_ACTION',
-      promise: compose(map(data => data.results), mocks.promise.bind(null, 'myParam')),
     })
   })
 })
