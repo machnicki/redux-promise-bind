@@ -1,3 +1,4 @@
+import _get from 'lodash/get'
 // @flow
 
 const extendBy = (object: Object, { metadata } : { metadata : any }) => {
@@ -6,6 +7,8 @@ const extendBy = (object: Object, { metadata } : { metadata : any }) => {
 }
 
 const promisesInQueue = {}
+const takeFirstActions = new Map()
+const takeLastActions = new Map()
 
 const runPromisesInQueue = (groupName: string) => {
   if (promisesInQueue[groupName].length) {
@@ -32,6 +35,9 @@ type ExtendedAction = {
   startAction: Object,
   successAction: Function,
   errorAction: Function,
+  promise: any,
+  promiseSuccess: any,
+  promiseReject: any,
 }
 
 // TODO prepare onCancel handler
@@ -56,31 +62,80 @@ const createErrorAction = ({ type, metadata }) => ex => (
   }, { metadata })
 )
 
-const takeLast = () => {
-
-}
-
-const dispatchPromise = (extendedAction: ExtendedAction, dispatch: Function) => {
+const dispatchPromise = (
+  extendedAction: ExtendedAction,
+  dispatch: Function,
+  onSuccess?: Function,
+  onError?: Function,
+) => {
   const {
     startAction,
     successAction,
     errorAction,
     initAction: {
-      promise,
+      promise: originalPromise,
       promiseArg,
     },
+    promise,
+    promiseSuccess,
+    promiseReject,
   } = extendedAction
 
   dispatch(startAction)
-  return promise(...(Array.isArray(promiseArg) ? promiseArg : [promiseArg]))
+  originalPromise(...(Array.isArray(promiseArg) ? promiseArg : [promiseArg]))
     .then((data) => {
+      if (typeof onSuccess === 'function') return onSuccess(data)
       dispatch(successAction(data))
-      return data
+      return promiseSuccess(data)
     }, (ex) => {
       dispatch(errorAction(ex))
+      if (typeof onError === 'function') onError(ex)
       // TODO change to throw an error
-      return ex
+      return promiseReject(ex)
     })
+
+  return promise
+}
+
+const addToGroup = (extendedAction: ExtendedAction, actionsList: Object) => {
+  const { initAction: { group } } = extendedAction
+  if (!actionsList.has(group)) actionsList.set(group, [])
+  actionsList.get(group).push(extendedAction)
+}
+
+// TODO this logic should be to go first ;)
+const takeLast = (extendedAction: ExtendedAction, dispatch: Function) => {
+  const { initAction: { group }, successAction, errorAction } = extendedAction
+
+  addToGroup(extendedAction, takeLastActions)
+
+  dispatchPromise(extendedAction, dispatch, (data) => {
+
+  })
+}
+
+const takeFirst = (extendedAction: ExtendedAction, dispatch: Function) => {
+  const { initAction: { group }, successAction, errorAction } = extendedAction
+
+  addToGroup(extendedAction, takeFirstActions)
+
+  if (_get(takeFirstActions.get(group), 'length') === 1) {
+    dispatchPromise(extendedAction, dispatch, (data) => {
+      takeFirstActions.get(group).slice(1).forEach(({ successAction, errorAction }) => {
+        dispatch(successAction(data))
+        return data
+      })
+
+      takeFirstActions.delete(group)
+    }, (err) => {
+      takeFirstActions.get(group).slice(1).forEach(({ successAction, errorAction }) => {
+        dispatch(errorAction(err))
+        return err
+      })
+
+      takeFirstActions.delete(group)
+    })
+  }
 }
 
 const addPromiseToQueue = (extendedAction: ExtendedAction, dispatch: Function) => {
@@ -100,12 +155,24 @@ const addPromiseToQueue = (extendedAction: ExtendedAction, dispatch: Function) =
   return promise
 }
 
-const createExtendedAction = (action: Action): ExtendedAction => ({
-  initAction: action,
-  startAction: createStartAction(action),
-  successAction: createSuccessAction(action),
-  errorAction: createErrorAction(action),
-})
+const createExtendedAction = (action: Action): ExtendedAction => {
+  let promiseSuccess, promiseReject
+
+  const promise = new Promise((success, reject) => {
+    promiseSuccess = success
+    promiseReject = reject
+  })
+
+  return {
+    initAction: action,
+    startAction: createStartAction(action),
+    successAction: createSuccessAction(action),
+    errorAction: createErrorAction(action),
+    promise,
+    promiseSuccess,
+    promiseReject,
+  }
+}
 
 const promiseBindMiddleware = (
   { dispatch } : { dispatch: Function },
@@ -118,6 +185,8 @@ const promiseBindMiddleware = (
         return addPromiseToQueue(extendedAction, dispatch)
       case 'takeLast':
         return takeLast(extendedAction, dispatch)
+      case 'takeFirst':
+        return takeFirst(extendedAction, dispatch)
       default:
         return dispatchPromise(extendedAction, dispatch)
     }

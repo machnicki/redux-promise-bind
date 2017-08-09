@@ -121,32 +121,36 @@ describe('#Redux Promise Bind Middleware', () => {
     })
   })
 
-  it('should chain promises after success', () => {
+  it('should chain promises after success', (done) => {
     const thenSpy = sinon.spy()
 
     dispatchAction({
       type: 'MY_ACTION',
       promise: mocks.promise,
-    }).then(thenSpy)
+    }).then((...data) => {
+      thenSpy(...data)
+      expect(thenSpy).to.have.been.calledOnce
+      expect(thenSpy).to.have.been.calledWith({ data: 'test' })
+      done()
+    })
 
     promisesMocksQueue[0].success({ data: 'test' })
-
-    expect(thenSpy).to.have.been.calledOnce
-    expect(thenSpy).to.have.been.calledWith({ data: 'test' })
   })
 
-  it('should chain promises after failure', () => {
+  it('should chain promises after failure', (done) => {
     const thenSpy = sinon.spy()
 
     dispatchAction({
       type: 'MY_ACTION',
       promise: mocks.promise,
-    }).then(null, thenSpy)
+    }).then(null, (...data) => {
+      thenSpy(...data)
+      expect(thenSpy).to.have.been.calledOnce
+      expect(thenSpy).to.have.been.calledWith('error!')
+      done()
+    })
 
     promisesMocksQueue[0].error('error!')
-
-    expect(thenSpy).to.have.been.calledOnce
-    expect(thenSpy).to.have.been.calledWith('error!')
   })
 
   it('should trigger promises in predefined queue', (done) => {
@@ -154,21 +158,21 @@ describe('#Redux Promise Bind Middleware', () => {
 
     dispatchAction({
       type: 'MY_ACTION1',
-      promise: mocks.promise.bind(null, 'myParam1'),
+      promise: mocks.promise,
       group: 'myGroup',
       logic: 'inQueue',
     }).then(thenSpy)
 
     dispatchAction({
       type: 'MY_ACTION2',
-      promise: mocks.promise.bind(null, 'myParam2'),
+      promise: mocks.promise,
       group: 'myGroup',
       logic: 'inQueue',
     }).then(thenSpy)
 
     dispatchAction({
       type: 'MY_ACTION3',
-      promise: mocks.promise.bind(null, 'myParam3'),
+      promise: mocks.promise,
       group: 'myAnotherGroup',
       logic: 'inQueue',
     }).then((...data) => {
@@ -203,34 +207,120 @@ describe('#Redux Promise Bind Middleware', () => {
   })
 
   xit('should abort previous promises', () => {
-    promiseBindMiddleware({
-      type: 'MY_ACTION1',
-      promise: mocks.promise.bind(null, 'myParam1'),
+    const thenSpy = sinon.spy()
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      group: 'myGroup',
+      logic: 'takeLast', // TODO mention that type should be the same as well
+      metadata: 'first-action',
+    }).then(thenSpy)
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      group: 'myAnotherGroup',
+      logic: 'takeLast',
+      metadata: 'second-action',
+    }).then(thenSpy)
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
       group: 'myGroup',
       logic: 'takeLast',
+      metadata: 'second-action',
+    }).then(thenSpy)
+
+    expect(dispatchSpy.callCount).to.equal(3)
+    expect(dispatchSpy.getCall(0)).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: 'first-action',
+    })
+    expect(dispatchSpy.getCall(1)).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: 'second-action',
+    })
+    expect(dispatchSpy.getCall(2)).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: 'third-action',
+    })
+    promisesMocksQueue[0].success('my-first-response')
+    promisesMocksQueue[1].success('my-second-response')
+    promisesMocksQueue[2].success('my-third-response')
+    expect(dispatchSpy.callCount).to.equal(5)
+    expect(dispatchSpy.getCall(3)).to.have.been.calledWith({
+      type: 'MY_ACTION_SUCCESS',
+      payload: 'my-second-response',
+      metadata: 'second-action',
+    })
+    expect(dispatchSpy.getCall(4)).to.have.been.calledWith({
+      type: 'MY_ACTION_SUCCESS',
+      payload: 'my-third-response',
+      metadata: 'thirdaction',
     })
 
-    promiseBindMiddleware({
-      type: 'MY_ACTION2',
-      promise: mocks.promise.bind(null, 'myParam2'),
-      group: 'myGroup',
-      logic: 'takeLast',
-    })
+    expect(thenSpy).to.have.been.calledThrice
+    expect(thenSpy.getCall(0)).to.have.been.calledWith('my-second-response')
+    expect(thenSpy.getCall(1)).to.have.been.calledWith('my-third-response')
+    expect(thenSpy.getCall(2)).to.have.been.calledWith('my-third-response')
   })
 
   xit('should abort next promises', () => {
-    promiseBindMiddleware({
-      type: 'MY_ACTION1',
-      promise: mocks.promise.bind(null, 'myParam1'),
+    const thenSpy = sinon.spy()
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
       group: 'myGroup',
       logic: 'takeFirst',
+      metadata: 'first-action',
+    }).then(thenSpy)
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      group: 'myAnotherGroup',
+      logic: 'takeFirst',
+      metadata: 'second-action',
+    }).then(thenSpy)
+
+    dispatchAction({
+      type: 'MY_ACTION',
+      promise: mocks.promise,
+      group: 'myGroup',
+      logic: 'takeFirst',
+      metadata: 'third-action',
+    }).then(thenSpy)
+
+    expect(dispatchSpy.callCount).to.equal(2)
+    expect(dispatchSpy.getCall(0)).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: 'first-action',
+    })
+    expect(dispatchSpy.getCall(1)).to.have.been.calledWith({
+      type: 'MY_ACTION_START',
+      metadata: 'second-action',
+    })
+    promisesMocksQueue[0].success('my-first-response')
+    promisesMocksQueue[1].success('my-second-response')
+    promisesMocksQueue[2].success('my-third-response')
+    expect(dispatchSpy.callCount).to.equal(4)
+    expect(dispatchSpy.getCall(2)).to.have.been.calledWith({
+      type: 'MY_ACTION_SUCCESS',
+      payload: 'my-first-response',
+      metadata: 'first-action',
+    })
+    expect(dispatchSpy.getCall(3)).to.have.been.calledWith({
+      type: 'MY_ACTION_SUCCESS',
+      payload: 'my-second-response',
+      metadata: 'second-action',
     })
 
-    promiseBindMiddleware({
-      type: 'MY_ACTION2',
-      promise: mocks.promise.bind(null, 'myParam2'),
-      group: 'myGroup',
-      logic: 'takeFirst',
-    })
+    expect(thenSpy).to.have.been.calledThrice
+    expect(thenSpy.getCall(0)).to.have.been.calledWith('my-first-response')
+    expect(thenSpy.getCall(1)).to.have.been.calledWith('my-first-response')
+    expect(thenSpy.getCall(2)).to.have.been.calledWith('my-second-response')
   })
 })
